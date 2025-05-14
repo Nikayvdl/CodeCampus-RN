@@ -1,10 +1,15 @@
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Linking } from 'react-native';
 
 const CourseCard = ({ course }) => {
-  const openCourseVideo = (url) => {
-    return () => {
-      console.log("Video URL:", url);
-    };
+ const openCourseVideo = (url) => {
+  return () => {
+    if (url) {
+      Linking.openURL(url).catch(err => {
+      });
+   
+  };
+};
+
   };
 
   return (
