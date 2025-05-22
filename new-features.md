@@ -79,7 +79,9 @@
 ### User Story 8: Dark mode
 **Als gebruiker** wil ik **kunnen schakelen tussen light en dark mode** zodat ik **de app kan bekijken op een manier die comfortabel is voor mijn ogen, vooral 's avonds**.
 
-**Acceptatiecriteria:**
+**A
+### User Story 8: Dark mode
+**Als gebruiker** wil ik **kunnen schakelen tussen light en dark mode** zodat ik **de app kan bekijken op een manier die comfortabel is voor mijn ogen, vooral 's avonds**.cceptatiecriteria:**
 - Er is een schakelaar om tussen light en dark mode te wisselen
 - De gekozen modus wordt opgeslagen in AsyncStorage
 - Alle elementen hebben aangepaste styling voor beide modi

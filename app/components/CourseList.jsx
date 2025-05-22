@@ -1,7 +1,8 @@
+import React from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
 import CourseCard from './CourseCard';
 
-const CourseList = ({ courses }) => {
+const CourseList = ({ courses, onPress }) => {
   return (
     <View style={styles.container}>
       {courses.length === 0 ? (
@@ -9,9 +10,10 @@ const CourseList = ({ courses }) => {
       ) : (
         <FlatList
           data={courses}
-          renderItem={({ item }) => <CourseCard course={item} />}
+          renderItem={({ item }) => <CourseCard course={item} onPress={onPress} />}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          keyExtractor={(item) => item.id.toString()}
         />
       )}
     </View>
