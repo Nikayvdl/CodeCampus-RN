@@ -2,19 +2,27 @@ import React from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
 import CourseCard from './CourseCard';
 
-const CourseList = ({ courses, onPress }) => {
+const CourseList = ({ courses, onPress, onToggleFavorite, favorites }) => {
   return (
     <View style={styles.container}>
       {courses.length === 0 ? (
         <Text style={styles.emptyMessage}>Geen cursussen gevonden.</Text>
       ) : (
-        <FlatList
-          data={courses}
-          renderItem={({ item }) => <CourseCard course={item} onPress={onPress} />}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          keyExtractor={(item) => item.id.toString()}
-        />
+<FlatList
+  data={courses}
+  renderItem={({ item }) => (
+    <CourseCard
+      course={item}
+      onPress={onPress}
+      isFavorite={favorites.includes(item.id)}
+      onToggleFavorite={onToggleFavorite}
+    />
+  )}
+  contentContainerStyle={styles.listContent}
+  showsVerticalScrollIndicator={false}
+  keyExtractor={(item) => item.id.toString()}
+/>
+
       )}
     </View>
   );

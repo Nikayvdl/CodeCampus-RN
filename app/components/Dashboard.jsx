@@ -1,45 +1,78 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  Linking,
-  Image,
-  Modal,
+  View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Modal,
+  Image, Linking, LayoutAnimation, Platform, UIManager, ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CourseList from './CourseList';
 import PopularCourses from './PopularCourses';
 import Statistics from './Statistics';
+import { Appearance, useColorScheme } from 'react-native';
+
+
+const FAVORITE_KEY = 'FAVORITE_COURSES';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const Dashboard = ({ courseData }) => {
   const [activeTab, setActiveTab] = useState('all');
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [categoryFilters, setCategoryFilters] = useState([]);
   const [isFilterVisible, setIsFilterVisible] = useState(false);
-  const [isAtBottom, setIsAtBottom] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [sortOption, setSortOption] = useState('populariteit');
+  const [favorites, setFavorites] = useState([]);
 
-  const allCategories = [
-    'web', 'fullstack', 'javascript', 'node', 'git', 'tools', 'collaboration',
+  const allCategories = [/* same as before */ 'web', 'fullstack', 'javascript', 'node', 'git', 'tools', 'collaboration',
     'java', 'backend', 'enterprise', 'html', 'css', 'frontend', 'python',
     'data-science', 'analytics', 'api', 'react'
   ];
 
+  useEffect(() => {
+    loadFavorites();
+    applyFilters();
+  }, [activeTab, categoryFilters, searchQuery, sortOption]);
+
+  const loadFavorites = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(FAVORITE_KEY);
+      if (stored) setFavorites(JSON.parse(stored));
+    } catch (err) {
+      console.error('Fout bij laden favorieten', err);
+    }
+  };
+
+  const toggleFavorite = async (id) => {
+    const updated = favorites.includes(id)
+      ? favorites.filter((f) => f !== id)
+      : [...favorites, id];
+    setFavorites(updated);
+    await AsyncStorage.setItem(FAVORITE_KEY, JSON.stringify(updated));
+  };
+
+  const applyFilters = () => {
+    if (!reduceMotion) LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsLoading(true);
+    setTimeout(() => setIsLoading(false), 300);
+  };
+
   const filteredCourses = () => {
     let filtered = courseData;
-
     if (!Array.isArray(filtered)) return [];
 
-    if (activeTab !== 'all') {
-      if (activeTab === 'populair') {
-        filtered = [...filtered].sort((a, b) => b.views - a.views);
-      } else {
-        filtered = filtered.filter((course) =>
-          course.level === (activeTab === 'beginner' ? 'Beginner' : 'Gevorderd')
-        );
-      }
+    if (activeTab === 'populair') {
+      filtered = [...filtered].sort((a, b) => b.views - a.views);
+    } else if (activeTab === 'beginner' || activeTab === 'gevorderd') {
+      filtered = filtered.filter((course) =>
+        course.level === (activeTab === 'beginner' ? 'Beginner' : 'Gevorderd')
+      );
+    } else if (activeTab === 'favorieten') {
+      filtered = filtered.filter((c) => favorites.includes(c.id));
     }
 
     if (categoryFilters.length > 0) {
@@ -48,178 +81,177 @@ const Dashboard = ({ courseData }) => {
       );
     }
 
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter((course) =>
+        course.title.toLowerCase().includes(q) ||
+        course.description.toLowerCase().includes(q)
+      );
+    }
+
+    if (sortOption === 'populariteit') {
+      filtered = [...filtered].sort((a, b) => b.views - a.views);
+    } else if (sortOption === 'rating') {
+      filtered = [...filtered].sort((a, b) => b.rating - a.rating);
+    } else if (sortOption === 'duur') {
+      filtered = [...filtered].sort((a, b) =>
+        parseInt(a.duration) - parseInt(b.duration)
+      );
+    }
+
     return filtered;
+  };
+
+  const tabs = ['all', 'beginner', 'gevorderd', 'populair', 'favorieten'];
+  const tabLabels = {
+    all: 'Alle Cursussen',
+    beginner: 'Voor Beginners',
+    gevorderd: 'Gevorderd',
+    populair: 'Meest Bekeken',
+    favorieten: `Favorieten (${favorites.length})`,
   };
 
   const handleCoursePress = (course) => setSelectedCourse(course);
   const closeModal = () => setSelectedCourse(null);
 
-  const openVideo = (url) => {
-    if (url) {
-      Linking.openURL(url).catch((err) => {
-        console.error('Kan video niet openen:', err);
-      });
-    }
-  };
-
-  const handleScroll = (event) => {
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const paddingToBottom = 20;
-    const isBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
-    setIsAtBottom(isBottom);
-  };
-
   return (
     <View style={styles.dashboard}>
+      {/* search bar */}
+      <View style={styles.searchBarContainer}>
+        <Ionicons name="search" size={20} color="#888" style={{ marginRight: 8 }} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Zoek cursus op titel of trefwoord..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+
+      {/* tab bar */}
       <View style={styles.tabContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll}>
-          {['all', 'beginner', 'gevorderd', 'populair'].map((tab) => (
+          {tabs.map((tab) => (
             <TouchableOpacity
               key={tab}
+              activeOpacity={0.7}
               style={[styles.tabButton, activeTab === tab && styles.activeTab]}
               onPress={() => setActiveTab(tab)}
             >
               <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-                {{
-                  all: 'Alle Cursussen',
-                  beginner: 'Voor Beginners',
-                  gevorderd: 'Gevorderd',
-                  populair: 'Meest Bekeken',
-                }[tab]}
+                {tabLabels[tab]}
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
       </View>
 
+      {/* content */}
       <View style={styles.content}>
         <View style={styles.headerWithFilter}>
-          <Text style={styles.sectionTitle}>
-            {{
-              all: 'Alle Cursussen',
-              beginner: 'Cursussen voor Beginners',
-              gevorderd: 'Gevorderde Cursussen',
-              populair: 'Meest Bekeken Cursussen',
-            }[activeTab]}
-          </Text>
-
-          <TouchableOpacity onPress={() => setIsFilterVisible((prev) => !prev)} style={styles.filterButton}>
+          <Text style={styles.sectionTitle}>{tabLabels[activeTab]}</Text>
+          <TouchableOpacity onPress={() => setIsFilterVisible(!isFilterVisible)} style={styles.filterButton}>
             <Ionicons name="filter" size={20} color="#3498db" />
           </TouchableOpacity>
         </View>
 
-        {categoryFilters.length > 0 && (
-          <TouchableOpacity onPress={() => setCategoryFilters([])} style={{ marginBottom: 10 }}>
-            <Text style={{ color: 'red' }}>Wis filters ({categoryFilters.length})</Text>
-          </TouchableOpacity>
+        {/* categories */}
+        {isFilterVisible && (
+          <View style={styles.dropdownContainer}>
+            <View style={styles.dropdownGrid}>
+              {allCategories.map((category) => {
+                const selected = categoryFilters.includes(category);
+                return (
+                  <TouchableOpacity
+                    key={category}
+                    onPress={() => {
+                      setCategoryFilters((prev) =>
+                        selected ? prev.filter((c) => c !== category) : [...prev, category]
+                      );
+                    }}
+                    style={styles.dropdownItem}
+                  >
+                    <Ionicons
+                      name={selected ? 'checkbox-outline' : 'square-outline'}
+                      size={20}
+                      color={selected ? '#3498db' : '#aaa'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.dropdownLabel}>{category}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
         )}
 
-        <CourseList courses={filteredCourses()} onPress={handleCoursePress} />
+        {/* sorting */}
+        <ScrollView>
+          <View style={{ flexDirection: 'row', marginBottom: 10 }}>
+            {['populariteit', 'rating', 'duur'].map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[styles.sortOption, sortOption === option && styles.activeSortOption]}
+                onPress={() => setSortOption(option)}
+              >
+                <Text style={{ color: sortOption === option ? '#fff' : '#333' }}>{option}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {categoryFilters.length > 0 && (
+            <TouchableOpacity onPress={() => setCategoryFilters([])} style={{ marginBottom: 10 }}>
+              <Text style={{ color: 'red' }}>Wis filters ({categoryFilters.length})</Text>
+            </TouchableOpacity>
+          )}
+
+          {isLoading ? (
+            <ActivityIndicator size="large" color="#3498db" style={{ marginTop: 20 }} />
+          ) : filteredCourses().length === 0 ? (
+            <Text style={{ marginTop: 20, color: '#888', fontStyle: 'italic' }}>
+              Geen cursussen gevonden...
+            </Text>
+          ) : (
+            <CourseList
+              courses={filteredCourses()}
+              onPress={handleCoursePress}
+              favorites={favorites}
+              onToggleFavorite={toggleFavorite}
+            />
+          )}
+        </ScrollView>
 
         <View style={styles.sidebarContainer}>
           <PopularCourses courses={courseData} />
           <Statistics courses={courseData} />
         </View>
+
+
       </View>
 
-      {/* Cursusdetails Modal */}
-      <Modal visible={!!selectedCourse} animationType="slide" transparent={true}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closeModal}>
-          <TouchableOpacity style={styles.modalContent} activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-            <TouchableOpacity style={styles.closeIcon} onPress={closeModal}>
-              <Text style={styles.closeIconText}>×</Text>
-            </TouchableOpacity>
-
-            <ScrollView>
-              {selectedCourse?.imageUrl && (
-                <Image source={{ uri: selectedCourse.imageUrl }} style={styles.courseImage} resizeMode="cover" />
-              )}
-
-              <Text style={styles.modalTitle}>{selectedCourse?.title}</Text>
-              <Text style={styles.modalDescription}>{selectedCourse?.description}</Text>
-
-              {[{ label: 'Instructor', value: selectedCourse?.instructor },
-                { label: 'Niveau', value: selectedCourse?.level },
-                { label: 'Duur', value: selectedCourse?.duration },
-                { label: 'Leden', value: selectedCourse?.members },
-                { label: 'Beoordeling', value: `${selectedCourse?.rating} ⭐` },
-                { label: 'Categorieën', value: selectedCourse?.categories?.join(', ') }
-              ].map((item, index) => (
-                <View style={styles.infoRow} key={index}>
-                  <Text style={styles.infoLabel}>{item.label}:</Text>
-                  <Text style={styles.infoValue}>{item.value}</Text>
-                </View>
-              ))}
-
-              {selectedCourse?.learningObjectives && (
-                <>
-                  <Text style={styles.modalSectionTitle}>Leerdoelen:</Text>
-                  {selectedCourse.learningObjectives.map((obj, index) => (
-                    <Text key={index} style={styles.modalListItem}>• {obj}</Text>
-                  ))}
-                </>
-              )}
-
-              <TouchableOpacity style={[styles.button, { marginTop: 20 }]} onPress={() => openVideo(selectedCourse?.videoUrl)}>
-                <Text style={styles.buttonText}>Bekijk Video</Text>
+      {/* modal */}
+      {selectedCourse && (
+        <Modal visible={true} transparent={true} animationType="slide" onRequestClose={closeModal}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <TouchableOpacity onPress={closeModal} style={styles.modalCloseIcon}>
+                <Ionicons name="close" size={24} color="#000" />
               </TouchableOpacity>
-            </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Filter Dropdown */}
-      {isFilterVisible && (
-        <View style={styles.dropdownOverlay}>
-          <View style={styles.dropdown}>
-            <Text style={styles.dropdownTitle}>Filter op categorie</Text>
-            <ScrollView
-              style={{ maxHeight: 200 }}
-              onScroll={handleScroll}
-              scrollEventThrottle={16}
-            >
-              <View style={styles.dropdownGrid}>
-                {allCategories.map((category) => {
-                  const selected = categoryFilters.includes(category);
-                  return (
-                    <TouchableOpacity
-                      key={category}
-                      style={styles.dropdownItemColumn}
-                      onPress={() => {
-                        setCategoryFilters((prev) =>
-                          prev.includes(category)
-                            ? prev.filter((c) => c !== category)
-                            : [...prev, category]
-                        );
-                      }}
-                    >
-                      <Ionicons
-                        name={selected ? 'checkbox' : 'square-outline'}
-                        size={20}
-                        color={selected ? '#3498db' : '#aaa'}
-                        style={{ marginRight: 8 }}
-                      />
-                      <Text style={styles.categoryText}>{category}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+              <Text style={styles.modalTitle}>{selectedCourse.title}</Text>
+              <Image source={{ uri: selectedCourse.imageUrl }} style={styles.modalImage} />
+              <Text style={styles.modalDescription}>{selectedCourse.description}</Text>
+              <View style={{ marginTop: 15, alignSelf: 'stretch' }}>
+                <Text style={styles.modalInfo}><Text style={styles.modalLabel}>Duur:</Text> {selectedCourse.duration}</Text>
+                <Text style={styles.modalInfo}><Text style={styles.modalLabel}>Niveau:</Text> {selectedCourse.level}</Text>
+                <Text style={styles.modalInfo}><Text style={styles.modalLabel}>Instructeur:</Text> {selectedCourse.instructor}</Text>
+                <Text style={styles.modalInfo}><Text style={styles.modalLabel}>Leden:</Text> {selectedCourse.members}</Text>
+                <Text style={styles.modalInfo}><Text style={styles.modalLabel}>Rating:</Text> {selectedCourse.rating} ⭐</Text>
               </View>
-            </ScrollView>
-            <View style={{ alignItems: 'center', marginTop: 5 }}>
-              <Ionicons
-                name={isAtBottom ? 'arrow-up' : 'arrow-down'}
-                size={24}
-                color="#3498db"
-              />
+              <TouchableOpacity onPress={() => Linking.openURL(selectedCourse.videoUrl)}>
+                <Text style={{ color: '#3498db', marginTop: 15 }}>Bekijk video</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[styles.button, { marginTop: 10 }]}
-              onPress={() => setIsFilterVisible(false)}
-            >
-              <Text style={styles.buttonText}>Toepassen</Text>
-            </TouchableOpacity>
           </View>
-        </View>
+        </Modal>
       )}
     </View>
   );
@@ -227,6 +259,17 @@ const Dashboard = ({ courseData }) => {
 
 const styles = StyleSheet.create({
   dashboard: { flex: 1, backgroundColor: '#fff' },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f3f5',
+    borderRadius: 8,
+    margin: 15,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  
+  searchInput: { flex: 1, fontSize: 16, color: '#333' },
   tabContainer: {
     backgroundColor: '#f8f9fa',
     paddingVertical: 10,
@@ -254,88 +297,83 @@ const styles = StyleSheet.create({
   filterButton: { marginLeft: 10 },
   sectionTitle: { fontSize: 20, fontWeight: '600', color: '#333' },
   sidebarContainer: { marginTop: 20 },
-  modalOverlay: {
+  sortOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#eee',
+    borderRadius: 16,
+    marginRight: 10,
+  },
+  activeSortOption: {
+    backgroundColor: '#3498db',
+  },
+  modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContent: {
-    margin: 20,
-    backgroundColor: 'white',
-    borderRadius: 10,
+    backgroundColor: '#fff',
+    borderRadius: 8,
     padding: 20,
-    maxHeight: '80%',
+    width: '85%',
+    alignItems: 'center',
     position: 'relative',
   },
-  closeIcon: {
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
+  modalDescription: { fontSize: 16, color: '#555', marginTop: 10, textAlign: 'center' },
+  modalImage: { width: '100%', height: 150, resizeMode: 'cover', borderRadius: 8 },
+  modalCloseIcon: {
     position: 'absolute',
     top: 10,
     right: 10,
+    padding: 5,
     zIndex: 10,
-    backgroundColor: '#ccc',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  closeIconText: { fontSize: 20, fontWeight: 'bold', color: '#333' },
-  courseImage: {
-    width: '100%',
-    height: 180,
-    borderRadius: 10,
-    marginBottom: 15,
-  },
-  modalTitle: { fontSize: 22, fontWeight: '700', marginBottom: 10 },
-  modalDescription: { fontSize: 16, marginBottom: 15, color: '#444' },
-  infoRow: { flexDirection: 'row', marginBottom: 6 },
-  infoLabel: { fontWeight: '600', width: 100, color: '#333' },
-  infoValue: { flex: 1, color: '#555' },
-  modalSectionTitle: { fontWeight: '600', fontSize: 18, marginBottom: 8, marginTop: 15 },
-  modalListItem: { fontSize: 15, marginBottom: 6, paddingLeft: 8, color: '#444' },
-  button: {
-    backgroundColor: '#3498db',
-    borderRadius: 6,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  buttonText: { color: 'white', fontSize: 16, fontWeight: '600' },
-  dropdownOverlay: {
-    position: 'absolute',
-    top: 120,
-    right: 20,
-    left: 20,
-    zIndex: 999,
-  },
-  dropdown: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 8,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  dropdownTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 10,
+  dropdownContainer: {
+  backgroundColor: '#f8f9fa',
+  borderRadius: 8,
+  padding: 10,
+  marginVertical: 10,
+  borderWidth: 1,
+  borderColor: '#ddd',
+},
+
+dropdownGrid: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  justifyContent: 'space-between',
+},
+
+dropdownItem: {
+  width: '48%',
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingVertical: 6,
+  paddingHorizontal: 4,
+  marginBottom: 8,
+  backgroundColor: '#fff',
+  borderRadius: 6,
+},
+
+dropdownLabel: {
+  color: '#333',
+  fontSize: 14,
+  flexShrink: 1,
+},
+
+  modalInfo: {
+    fontSize: 15,
     color: '#333',
-    textAlign: 'center',
+    marginTop: 5,
   },
-  dropdownGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+  modalLabel: {
+    fontWeight: '600',
+    color: '#000',
   },
-  dropdownItemColumn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '48%',
-    paddingVertical: 6,
-  },
-  categoryText: { fontSize: 14, color: '#444' },
 });
 
 export default Dashboard;
+
+
