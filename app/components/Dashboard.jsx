@@ -218,12 +218,13 @@ const Dashboard = ({ courseData }) => {
               onToggleFavorite={toggleFavorite}
             />
           )}
-        </ScrollView>
+
 
         <View style={styles.sidebarContainer}>
           <PopularCourses courses={courseData} />
           <Statistics courses={courseData} />
         </View>
+                </ScrollView>
 
 
       </View>
@@ -296,7 +297,9 @@ const styles = StyleSheet.create({
   },
   filterButton: { marginLeft: 10 },
   sectionTitle: { fontSize: 20, fontWeight: '600', color: '#333' },
-  sidebarContainer: { marginTop: 20 },
+  sidebarContainer: { 
+    marginTop: 20,
+   },
   sortOption: {
     paddingHorizontal: 12,
     paddingVertical: 6,
