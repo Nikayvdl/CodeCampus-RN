@@ -8,10 +8,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import CourseList from './CourseList';
 import PopularCourses from './PopularCourses';
 import Statistics from './Statistics';
-import { Appearance, useColorScheme } from 'react-native';
-
 
 const FAVORITE_KEY = 'FAVORITE_COURSES';
+const FILTER_STATE_KEY = 'FILTER_STATE';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -28,13 +27,18 @@ const Dashboard = ({ courseData }) => {
   const [sortOption, setSortOption] = useState('populariteit');
   const [favorites, setFavorites] = useState([]);
 
-  const allCategories = [/* same as before */ 'web', 'fullstack', 'javascript', 'node', 'git', 'tools', 'collaboration',
+  const allCategories = ['web', 'fullstack', 'javascript', 'node', 'git', 'tools', 'collaboration',
     'java', 'backend', 'enterprise', 'html', 'css', 'frontend', 'python',
     'data-science', 'analytics', 'api', 'react'
   ];
 
   useEffect(() => {
     loadFavorites();
+    loadFilterState();
+  }, []);
+
+  useEffect(() => {
+    saveFilterState();
     applyFilters();
   }, [activeTab, categoryFilters, searchQuery, sortOption]);
 
@@ -53,6 +57,35 @@ const Dashboard = ({ courseData }) => {
       : [...favorites, id];
     setFavorites(updated);
     await AsyncStorage.setItem(FAVORITE_KEY, JSON.stringify(updated));
+  };
+
+  const saveFilterState = async () => {
+    try {
+      const state = {
+        activeTab,
+        categoryFilters,
+        sortOption,
+        searchQuery,
+      };
+      await AsyncStorage.setItem(FILTER_STATE_KEY, JSON.stringify(state));
+    } catch (err) {
+      console.error('Error saving filters', err);
+    }
+  };
+
+  const loadFilterState = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(FILTER_STATE_KEY);
+      if (stored) {
+        const state = JSON.parse(stored);
+        setActiveTab(state.activeTab || 'all');
+        setCategoryFilters(state.categoryFilters || []);
+        setSortOption(state.sortOption || 'populariteit');
+        setSearchQuery(state.searchQuery || '');
+      }
+    } catch (err) {
+      console.error('Error loading filters', err);
+    }
   };
 
   const applyFilters = () => {
@@ -116,7 +149,6 @@ const Dashboard = ({ courseData }) => {
 
   return (
     <View style={styles.dashboard}>
-      {/* search bar */}
       <View style={styles.searchBarContainer}>
         <Ionicons name="search" size={20} color="#888" style={{ marginRight: 8 }} />
         <TextInput
@@ -127,7 +159,6 @@ const Dashboard = ({ courseData }) => {
         />
       </View>
 
-      {/* tab bar */}
       <View style={styles.tabContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll}>
           {tabs.map((tab) => (
@@ -145,7 +176,6 @@ const Dashboard = ({ courseData }) => {
         </ScrollView>
       </View>
 
-      {/* content */}
       <View style={styles.content}>
         <View style={styles.headerWithFilter}>
           <Text style={styles.sectionTitle}>{tabLabels[activeTab]}</Text>
@@ -154,7 +184,6 @@ const Dashboard = ({ courseData }) => {
           </TouchableOpacity>
         </View>
 
-        {/* categories */}
         {isFilterVisible && (
           <View style={styles.dropdownContainer}>
             <View style={styles.dropdownGrid}>
@@ -184,7 +213,6 @@ const Dashboard = ({ courseData }) => {
           </View>
         )}
 
-        {/* sorting */}
         <ScrollView>
           <View style={{ flexDirection: 'row', marginBottom: 10 }}>
             {['populariteit', 'rating', 'duur'].map((option) => (
@@ -219,17 +247,13 @@ const Dashboard = ({ courseData }) => {
             />
           )}
 
-
-        <View style={styles.sidebarContainer}>
-          <PopularCourses courses={courseData} />
-          <Statistics courses={courseData} />
-        </View>
-                </ScrollView>
-
-
+          <View style={styles.sidebarContainer}>
+            <PopularCourses courses={courseData} />
+            <Statistics courses={courseData} />
+          </View>
+        </ScrollView>
       </View>
 
-      {/* modal */}
       {selectedCourse && (
         <Modal visible={true} transparent={true} animationType="slide" onRequestClose={closeModal}>
           <View style={styles.modalContainer}>
@@ -269,7 +293,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  
   searchInput: { flex: 1, fontSize: 16, color: '#333' },
   tabContainer: {
     backgroundColor: '#f8f9fa',
@@ -297,9 +320,7 @@ const styles = StyleSheet.create({
   },
   filterButton: { marginLeft: 10 },
   sectionTitle: { fontSize: 20, fontWeight: '600', color: '#333' },
-  sidebarContainer: { 
-    marginTop: 20,
-   },
+  sidebarContainer: { marginTop: 20 },
   sortOption: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -307,9 +328,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginRight: 10,
   },
-  activeSortOption: {
-    backgroundColor: '#3498db',
-  },
+  activeSortOption: { backgroundColor: '#3498db' },
   modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -335,37 +354,33 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   dropdownContainer: {
-  backgroundColor: '#f8f9fa',
-  borderRadius: 8,
-  padding: 10,
-  marginVertical: 10,
-  borderWidth: 1,
-  borderColor: '#ddd',
-},
-
-dropdownGrid: {
-  flexDirection: 'row',
-  flexWrap: 'wrap',
-  justifyContent: 'space-between',
-},
-
-dropdownItem: {
-  width: '48%',
-  flexDirection: 'row',
-  alignItems: 'center',
-  paddingVertical: 6,
-  paddingHorizontal: 4,
-  marginBottom: 8,
-  backgroundColor: '#fff',
-  borderRadius: 6,
-},
-
-dropdownLabel: {
-  color: '#333',
-  fontSize: 14,
-  flexShrink: 1,
-},
-
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 10,
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  dropdownGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  dropdownItem: {
+    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    marginBottom: 8,
+    backgroundColor: '#fff',
+    borderRadius: 6,
+  },
+  dropdownLabel: {
+    color: '#333',
+    fontSize: 14,
+    flexShrink: 1,
+  },
   modalInfo: {
     fontSize: 15,
     color: '#333',
@@ -378,5 +393,3 @@ dropdownLabel: {
 });
 
 export default Dashboard;
-
-
